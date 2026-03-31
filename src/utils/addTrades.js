@@ -1549,22 +1549,33 @@ async function filterExisting(param) {
 
         if (param == "trades") {
             //console.log(" -> ExistingTradesArray "+existingTradesArray)
-            existingTradesArray.forEach(element => {
-                //console.log("element "+element)
+            // Delete existing records from DB for dates that will be re-imported
+            for (const element of existingTradesArray) {
                 if (executions.hasOwnProperty(element)) {
-                    console.log(" -> Already imported date " + element)
+                    console.log(" -> Re-importing date " + element + " (deleting old record)")
                     existingImports.push(element)
+
+                    // Delete old trade record from Parse DB
+                    const parseObject = Parse.Object.extend("trades")
+                    const query = new Parse.Query(parseObject)
+                    query.equalTo("dateUnix", Number(element))
+                    const results = await query.find()
+                    if (results.length > 0) {
+                        await Promise.all(results.map(r => r.destroy()))
+                        console.log("   --> Deleted " + results.length + " old record(s) for date " + element)
+                    }
+
+                    // Also delete old excursions for this date
+                    const excObj = Parse.Object.extend("excursions")
+                    const excQuery = new Parse.Query(excObj)
+                    excQuery.equalTo("dateUnix", Number(element))
+                    const excResults = await excQuery.find()
+                    if (excResults.length > 0) {
+                        await Promise.all(excResults.map(r => r.destroy()))
+                    }
                 }
-            });
-
-            let tempExecutions = _.omit(executions, existingTradesArray)
-            for (let key in executions) delete executions[key]
-            Object.assign(executions, tempExecutions)
-            //console.log(" -> executions "+JSON.stringify(executions))
-
-            let tempTrades = _.omit(trades, existingTradesArray)
-            for (let key in trades) delete trades[key]
-            Object.assign(trades, tempTrades)
+            }
+            // Keep all new data (don't filter out existing dates)
         }
         resolve()
     })
