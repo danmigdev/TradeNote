@@ -69,7 +69,7 @@ async function monthLastNext(param) {
                             <div v-if="pageId == 'calendar'" class="d-none d-md-block">
                                 <p v-show="line[index].pAndL.trades">{{ line[index].pAndL.trades }} trades</p>
                                 <p v-show="line[index].pAndL[amountCase + 'Proceeds']">
-                                    {{ useThousandCurrencyFormat(parseInt(line[index].pAndL[amountCase + 'Proceeds'])) }}
+                                    {{ useThousandCurrencyFormat(line[index].pAndL[amountCase + 'Proceeds']) }}
                                 </p>
                             </div>
                         </div>
