@@ -267,10 +267,31 @@ export async function useGetFilteredTrades(param) {
             let index
 
             index = filteredTrades.findIndex(obj => obj.dateUnix == key)
-            filteredTrades[index].pAndL = pAndL[key]
-            filteredTrades[index].blotter = blotter[key]
-
+            if (index !== -1) {
+                filteredTrades[index].pAndL = pAndL[key]
+                filteredTrades[index].blotter = blotter[key]
+            }
         }
+
+        // Ensure every filteredTrades entry has pAndL and blotter (fallback for DST edge cases)
+        filteredTrades.forEach(entry => {
+            if (!entry.pAndL) {
+                // Try matching by date string instead of exact dateUnix
+                const entryDate = dayjs.unix(entry.dateUnix).tz(timeZoneTrade.value).format('YYYY-MM-DD')
+                for (const key of keys) {
+                    const keyDate = dayjs.unix(Number(key)).tz(timeZoneTrade.value).format('YYYY-MM-DD')
+                    if (keyDate === entryDate) {
+                        entry.pAndL = pAndL[key]
+                        entry.blotter = blotter[key]
+                        break
+                    }
+                }
+            }
+            if (!entry.pAndL) {
+                entry.pAndL = { netProceeds: 0, grossProceeds: 0, netWinsCount: 0, netLossCount: 0, grossWinsCount: 0, grossLossCount: 0 }
+                entry.blotter = {}
+            }
+        })
 
         filteredTrades.sort((a, b) => {
             return b.dateUnix - a.dateUnix
