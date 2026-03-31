@@ -167,26 +167,35 @@ export async function useBrokerMetaTrader4(param) {
             const parser = new DOMParser()
             const doc = parser.parseFromString(param, 'text/html')
 
-            // Extract account number from title or bold tags
+            // Extract account number and currency from report
             let account = "MT4"
+            let currency = "USD"
             const title = doc.querySelector('title')
             if (title) {
                 const match = title.textContent.match(/(\d{3,})/)
                 if (match) account = match[1]
             }
-            if (account === "MT4") {
-                const bolds = doc.querySelectorAll('b')
-                for (const b of bolds) {
-                    const text = b.textContent
-                    if (text.includes('Account') || text.includes('Statement')) {
-                        const match = text.match(/(\d{3,})/)
-                        if (match) {
-                            account = match[1]
-                            break
-                        }
-                    }
+            const bolds = doc.querySelectorAll('b')
+            for (const b of bolds) {
+                const text = b.textContent
+                if (account === "MT4" && (text.includes('Account') || text.includes('Statement'))) {
+                    const match = text.match(/(\d{3,})/)
+                    if (match) account = match[1]
                 }
+                // Detect currency (e.g., "Currency: EUR" or "Currency:EUR")
+                const currMatch = text.match(/Currency\s*:\s*([A-Z]{3})/i)
+                if (currMatch) currency = currMatch[1].toUpperCase()
             }
+            // Also check non-bold text for currency
+            if (currency === "USD") {
+                const allText = doc.body ? doc.body.textContent : ''
+                const currMatch2 = allText.match(/Currency\s*:\s*([A-Z]{3})/i)
+                if (currMatch2) currency = currMatch2[1].toUpperCase()
+            }
+            // Save detected currency to localStorage for display
+            localStorage.setItem('tradingCurrency', currency)
+
+            // Note: broker prefix is added in createTempExecutions
 
             // Helper to parse MT4 date/time (YYYY.MM.DD HH:MM or YYYY.MM.DD HH:MM:SS)
             const parseDateTime = (dateTimeStr) => {
@@ -198,10 +207,27 @@ export async function useBrokerMetaTrader4(param) {
                 return { date, time }
             }
 
-            // Find all table rows and locate the "Closed Transactions" section
+            // Helper to parse numbers that may use comma as decimal separator
+            const parseNum = (str) => {
+                if (!str) return 0
+                const cleaned = str.replace(/\s/g, '').replace(',', '.')
+                const val = parseFloat(cleaned)
+                return isNaN(val) ? 0 : val
+            }
+
+            // Sequential counter for exec times - ensures each open-close pair stays adjacent
+            let mt4RowCounter = 0
+            const counterToTime = (n) => {
+                const h = Math.floor(n / 3600)
+                const m = Math.floor((n % 3600) / 60)
+                const s = n % 60
+                return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0')
+            }
+
+            // Find all table rows
             const allRows = doc.querySelectorAll('tr')
             let inClosedSection = false
-            let headerFound = false
+            let columnMap = null // will be built from the header row
 
             for (const row of allRows) {
                 const cells = row.querySelectorAll('td')
@@ -212,7 +238,7 @@ export async function useBrokerMetaTrader4(param) {
                     const sectionText = row.textContent.trim().toLowerCase()
                     if (sectionText.includes('closed transactions') || sectionText.includes('closed trades')) {
                         inClosedSection = true
-                        headerFound = false
+                        columnMap = null
                         continue
                     }
                     if (inClosedSection && (sectionText.includes('open trades') || sectionText.includes('working orders') || sectionText.includes('summary') || sectionText === '')) {
@@ -223,29 +249,48 @@ export async function useBrokerMetaTrader4(param) {
 
                 if (!inClosedSection) continue
 
-                // Skip the column header row
-                if (cells[0].textContent.trim().toLowerCase() === 'ticket') {
-                    headerFound = true
+                // Detect column header row and build column map
+                const firstCell = cells[0].textContent.trim().toLowerCase()
+                if (firstCell === 'ticket') {
+                    columnMap = {}
+                    for (let c = 0; c < cells.length; c++) {
+                        const header = cells[c].textContent.trim().toLowerCase()
+                        if (header === 'ticket') columnMap.ticket = c
+                        else if (header === 'open time') columnMap.openTime = c
+                        else if (header === 'type') columnMap.type = c
+                        else if (header === 'size' || header === 'volume') columnMap.size = c
+                        else if (header === 'item' || header === 'symbol') columnMap.symbol = c
+                        else if (header === 'price' && columnMap.openPrice == null) columnMap.openPrice = c
+                        else if (header === 's / l' || header === 's/l' || header === 'sl') columnMap.sl = c
+                        else if (header === 't / p' || header === 't/p' || header === 'tp') columnMap.tp = c
+                        else if (header === 'close time') columnMap.closeTime = c
+                        else if (header === 'price' && columnMap.openPrice != null) columnMap.closePrice = c
+                        else if (header === 'commission') columnMap.commission = c
+                        else if (header === 'taxes') columnMap.taxes = c
+                        else if (header === 'swap') columnMap.swap = c
+                        else if (header === 'profit') columnMap.profit = c
+                    }
+                    console.log("  --> MT4 column map: " + JSON.stringify(columnMap))
                     continue
                 }
 
-                if (!headerFound) continue
-                if (cells.length < 14) continue
+                if (!columnMap) continue
+                if (cells.length < 10) continue
 
-                // Parse trade row
-                const type = cells[2].textContent.trim().toLowerCase()
+                // Parse trade row using column map
+                const type = (cells[columnMap.type] ? cells[columnMap.type].textContent.trim().toLowerCase() : '')
                 if (type !== 'buy' && type !== 'sell') continue
 
-                const openTime = cells[1].textContent.trim()
-                const size = cells[3].textContent.trim()
-                const symbol = cells[4].textContent.trim()
-                const openPrice = cells[5].textContent.trim()
-                const closeTime = cells[8].textContent.trim()
-                const closePrice = cells[9].textContent.trim()
-                const commission = parseFloat(cells[10].textContent.trim()) || 0
-                const taxes = parseFloat(cells[11].textContent.trim()) || 0
-                const swap = parseFloat(cells[12].textContent.trim()) || 0
-                const profit = parseFloat(cells[13].textContent.trim()) || 0
+                const openTime = cells[columnMap.openTime] ? cells[columnMap.openTime].textContent.trim() : ''
+                const size = cells[columnMap.size] ? cells[columnMap.size].textContent.trim() : ''
+                const symbol = cells[columnMap.symbol] ? cells[columnMap.symbol].textContent.trim() : ''
+                const openPrice = cells[columnMap.openPrice] ? cells[columnMap.openPrice].textContent.trim() : ''
+                const closeTime = cells[columnMap.closeTime] ? cells[columnMap.closeTime].textContent.trim() : ''
+                const closePrice = cells[columnMap.closePrice] ? cells[columnMap.closePrice].textContent.trim() : ''
+                const commission = columnMap.commission != null ? parseNum(cells[columnMap.commission].textContent.trim()) : 0
+                const taxes = columnMap.taxes != null ? parseNum(cells[columnMap.taxes].textContent.trim()) : 0
+                const swap = columnMap.swap != null ? parseNum(cells[columnMap.swap].textContent.trim()) : 0
+                const profit = columnMap.profit != null ? parseNum(cells[columnMap.profit].textContent.trim()) : 0
 
                 if (!symbol || !openPrice || !closePrice || !openTime || !closeTime) continue
 
@@ -260,20 +305,25 @@ export async function useBrokerMetaTrader4(param) {
                 const cleanSymbol = symbol.replace(/[#.]/g, '').toUpperCase()
 
                 // MT4 shows complete trades: split into opening + closing executions
+                // Both use close date and sequential synthetic exec times
+                // This ensures each open-close pair stays adjacent in the same group
+                const openExecTime = counterToTime(mt4RowCounter * 2)
+                const closeExecTime = counterToTime(mt4RowCounter * 2 + 1)
+                mt4RowCounter++
 
                 // Opening execution
                 tradesData.push({
                     Account: account,
-                    "T/D": open.date,
-                    "S/D": open.date,
-                    Currency: "USD",
+                    "T/D": close.date,
+                    "S/D": close.date,
+                    Currency: currency,
                     Type: assetType,
                     Side: type === 'buy' ? 'B' : 'SS',
                     SymbolOriginal: symbol,
                     Symbol: cleanSymbol,
                     Qty: size,
                     Price: openPrice,
-                    "Exec Time": open.time,
+                    "Exec Time": openExecTime,
                     Comm: "0",
                     SEC: "0",
                     TAF: "0",
@@ -293,14 +343,14 @@ export async function useBrokerMetaTrader4(param) {
                     Account: account,
                     "T/D": close.date,
                     "S/D": close.date,
-                    Currency: "USD",
+                    Currency: currency,
                     Type: assetType,
                     Side: type === 'buy' ? 'S' : 'BC',
                     SymbolOriginal: symbol,
                     Symbol: cleanSymbol,
                     Qty: size,
                     Price: closePrice,
-                    "Exec Time": close.time,
+                    "Exec Time": closeExecTime,
                     Comm: Math.abs(commission).toString(),
                     SEC: Math.abs(taxes).toString(),
                     TAF: Math.abs(swap).toString(),

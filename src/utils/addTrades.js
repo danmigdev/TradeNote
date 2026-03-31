@@ -1,4 +1,4 @@
-import { filteredTradesTrades, blotter, pAndL, tradeExcursionId, spinnerLoadingPage, currentUser, selectedBroker, tradesData, timeZoneTrade, uploadMfePrices, executions, tradeId, existingImports, trades, gotExistingTradesArray, existingTradesArray, brokerData, selectedTradovateTier, queryLimit, queryLimitExistingTrades, marketCloseTime } from '../stores/globals.js'
+import { filteredTradesTrades, blotter, pAndL, tradeExcursionId, spinnerLoadingPage, currentUser, selectedBroker, tradesData, timeZoneTrade, uploadMfePrices, executions, tradeId, existingImports, trades, gotExistingTradesArray, existingTradesArray, brokerData, selectedTradovateTier, queryLimit, queryLimitExistingTrades, marketCloseTime, brokers } from '../stores/globals.js'
 import { useBrokerHeldentrader, useBrokerInteractiveBrokers, useBrokerMetaTrader5, useBrokerMetaTrader4, useBrokerTdAmeritrade, useBrokerTradeStation, useBrokerTradeZero, useTradovate, useNinjaTrader, useRithmic, useFundTraders, useTastyTrade, useTopstepX } from './brokers.js'
 import { useChartFormat, useDateTimeFormat, useDecimalsArithmetic, useInitParse, useTimeFormat } from './utils.js'
 
@@ -404,9 +404,12 @@ async function createTempExecutions() {
         for (const key of keys) {
             try {
                 let temp2 = {};
-                temp2.account = tradesData[key].Account
+                const brokerObj = brokers.find(b => b.value === selectedBroker.value)
+                const brokerLabel = brokerObj ? brokerObj.label : selectedBroker.value
+                const accountWithBroker = brokerLabel + " - " + tradesData[key].Account
+                temp2.account = accountWithBroker
                 temp2.broker = selectedBroker.value
-                if (!tradeAccounts.includes(tradesData[key].Account)) tradeAccounts.push(tradesData[key].Account)
+                if (!tradeAccounts.includes(accountWithBroker)) tradeAccounts.push(accountWithBroker)
                 /*usDate = dayjs.tz("07/22/2021 00:00:00", 'MM/DD/YYYY 00:00:00', "UTC")
                 //frDate = usDate.tz("Europe/Paris")
                 console.log("date "+usDate+" and fr ")*/

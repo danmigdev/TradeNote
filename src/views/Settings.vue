@@ -1,7 +1,7 @@
 <script setup>
 import { onBeforeMount, onMounted, reactive, ref } from 'vue';
 import { useCheckCurrentUser, useInitTooltip, useGetAPIS, useGetLayoutStyle, useExport } from '../utils/utils';
-import { currentUser, renderProfile, availableTags, apis, layoutStyle } from '../stores/globals';
+import { currentUser, renderProfile, availableTags, apis, layoutStyle, tradingCurrency } from '../stores/globals';
 import { useGetAvailableTags } from '../utils/daily';
 
 /* MODULES */
@@ -17,6 +17,73 @@ const availableTagsTags = reactive([])
 
 let groupToDelete = ref(null)
 let tagToDelete = ref(null)
+let accountToDelete = ref(null)
+let deletingAccount = ref(false)
+let currencyInput = ref(tradingCurrency.value)
+
+const saveCurrency = () => {
+    const val = currencyInput.value.toUpperCase().trim()
+    if (val.length === 3) {
+        tradingCurrency.value = val
+        localStorage.setItem('tradingCurrency', val)
+        alert("Currency updated to " + val)
+    } else {
+        alert("Currency must be a 3-letter code (e.g., EUR, USD, GBP)")
+    }
+}
+
+const deleteAccount = async () => {
+    if (!accountToDelete.value) return
+    deletingAccount.value = true
+    try {
+        // Remove account from user profile
+        const accountName = accountToDelete.value
+        const newAccounts = currentUser.value.accounts.filter(a => a.value !== accountName)
+        const parseObject = Parse.Object.extend("_User")
+        const query = new Parse.Query(parseObject)
+        const results = await query.first()
+        if (results) {
+            results.set("accounts", newAccounts)
+            await results.save()
+            currentUser.value.accounts = newAccounts
+        }
+
+        // Delete all trades for this account
+        const collections = ["trades", "excursions"]
+        for (const collection of collections) {
+            let hasMore = true
+            while (hasMore) {
+                const obj = Parse.Object.extend(collection)
+                const q = new Parse.Query(obj)
+                q.limit(1000)
+                const res = await q.find()
+                // Filter by account in the trades data
+                if (collection === "trades" && res.length > 0) {
+                    const toDelete = res.filter(r => {
+                        const trades = r.get("trades") || []
+                        return trades.length > 0 && trades[0].account === accountName
+                    })
+                    if (toDelete.length > 0) {
+                        await Promise.all(toDelete.map(r => r.destroy()))
+                        console.log("  --> Deleted " + toDelete.length + " trade records for account " + accountName)
+                    } else {
+                        hasMore = false
+                    }
+                } else {
+                    hasMore = false
+                }
+            }
+        }
+
+        accountToDelete.value = null
+        alert("Account '" + accountName + "' deleted successfully")
+    } catch (error) {
+        console.error(error)
+        alert("Error deleting account")
+    } finally {
+        deletingAccount.value = false
+    }
+}
 
 let inputCount = ref(null)
 
@@ -572,6 +639,46 @@ const updateAPIS = async () => {
                     <button type="button" v-on:click="updateAPIS" class="btn btn-success">Save</button>
                 </div>
 
+
+                <hr />
+
+                <!--=============== CURRENCY ===============-->
+                <div class="mt-3 row align-items-center">
+                    <p class="fs-5 fw-bold">CURRENCY</p>
+                    <p class="fw-lighter">Set the currency used to display values in the dashboard.</p>
+                    <div class="col-12 col-md-4">Currency code</div>
+                    <div class="col-12 col-md-4">
+                        <input type="text" class="form-control" v-model="currencyInput" maxlength="3"
+                            placeholder="e.g., EUR, USD, GBP" style="text-transform: uppercase;" />
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <button type="button" v-on:click="saveCurrency" class="btn btn-success">Save</button>
+                    </div>
+                </div>
+
+                <hr />
+
+                <!--=============== ACCOUNTS ===============-->
+                <div class="mt-3 row align-items-center">
+                    <p class="fs-5 fw-bold">ACCOUNTS</p>
+                    <p class="fw-lighter">Delete an account and all its associated trade data. This action is irreversible.</p>
+                    <div class="col-12 col-md-4">Account to delete</div>
+                    <div class="col-12 col-md-8">
+                        <select v-on:input="accountToDelete = $event.target.value" class="form-select">
+                            <option selected value="">Select an account</option>
+                            <option v-for="item in currentUser.accounts" :key="item.value" :value="item.value">
+                                {{ item.label }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-3 mb-3">
+                    <button type="button" v-on:click="deleteAccount" class="btn btn-danger"
+                        :disabled="!accountToDelete || deletingAccount">
+                        <span v-if="deletingAccount">Deleting...</span>
+                        <span v-else>Delete Account</span>
+                    </button>
+                </div>
 
                 <hr />
 

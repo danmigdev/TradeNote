@@ -307,8 +307,13 @@ export async function useGetTrades(param) {
             let endD = selectedRange.value.end
             //console.log("start D "+startD)
             //console.log("end D "+endD)
-            query.greaterThanOrEqualTo("dateUnix", startD)
-            query.lessThan("dateUnix", endD)
+            if (startD === 0 && endD === 0) {
+                // "All" filter: no date constraints
+                query.greaterThanOrEqualTo("dateUnix", 0)
+            } else {
+                query.greaterThanOrEqualTo("dateUnix", startD)
+                query.lessThan("dateUnix", endD)
+            }
             query.ascending("dateUnix");
             query.limit(queryLimit.value);
         }
@@ -1379,6 +1384,16 @@ export const useDeleteAllData = async () => {
                 hasMore = false
             }
         }
+    }
+
+    // Clear accounts from user profile
+    const parseObject = Parse.Object.extend("_User")
+    const query = new Parse.Query(parseObject)
+    const user = await query.first()
+    if (user) {
+        user.set("accounts", [])
+        await user.save()
+        console.log("  --> Cleared accounts from user profile")
     }
 
     // Clear local state
