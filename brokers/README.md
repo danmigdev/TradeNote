@@ -132,6 +132,21 @@ Note: currently, TradeNote does not take into account ECN fees (available soon).
 3. Select time window of history data.
 4. Download as CSV.
 
+# MetaTrader 4 (MT 4)
+Please use the standalone MT4 windows application and follow the steps below. Make sure to set the MT4 language to English before exporting the trades.
+
+1. In the MetaTrader Terminal window at the bottom, select the **Account History** tab.
+2. Right-click on the account history area and select the time period you want to export (e.g., "All History" or a custom period).
+3. Right-click again on the account history area and select **Save as Report** (not "Save as Detailed Report").
+4. Save the `.htm` file to your desktop (or anywhere else).
+5. Import the saved HTML file into TradeNote.
+
+**Important notes:**
+- Use the standard report format ("Save as Report"), not the detailed report.
+- Only closed transactions are imported. Open trades and pending orders are ignored.
+- Commission, taxes, and swap fees are automatically extracted from the report.
+- The MT4 language must be set to English for the parser to work correctly.
+
 # MetaTrader 5 (MT 5)
 Please use the standalone MT5 windows application and follow the steps below. Also, make sure to set the MT5 language to English before exporting the trades. In the MT5 main menu at the top go to View -> Languages and select English.
 

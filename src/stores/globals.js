@@ -3251,6 +3251,12 @@ export const brokers = reactive([{
     autoSync: false
 },
 {
+    value: "metaTrader4",
+    label: "MetaTrader 4",
+    assetTypes: ["forex"],
+    autoSync: false
+},
+{
     value: "heldentrader",
     label: "Heldentrader",
     assetTypes: ["stocks"],

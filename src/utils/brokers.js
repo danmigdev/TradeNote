@@ -159,6 +159,178 @@ export async function useBrokerMetaTrader5(param) {
 
 
 /****************************
+ * METATRADER 4
+ ****************************/
+export async function useBrokerMetaTrader4(param) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const parser = new DOMParser()
+            const doc = parser.parseFromString(param, 'text/html')
+
+            // Extract account number from title or bold tags
+            let account = "MT4"
+            const title = doc.querySelector('title')
+            if (title) {
+                const match = title.textContent.match(/(\d{3,})/)
+                if (match) account = match[1]
+            }
+            if (account === "MT4") {
+                const bolds = doc.querySelectorAll('b')
+                for (const b of bolds) {
+                    const text = b.textContent
+                    if (text.includes('Account') || text.includes('Statement')) {
+                        const match = text.match(/(\d{3,})/)
+                        if (match) {
+                            account = match[1]
+                            break
+                        }
+                    }
+                }
+            }
+
+            // Helper to parse MT4 date/time (YYYY.MM.DD HH:MM or YYYY.MM.DD HH:MM:SS)
+            const parseDateTime = (dateTimeStr) => {
+                const parts = dateTimeStr.split(' ')
+                const dateParts = parts[0].split('.')
+                const date = dateParts[1] + '/' + dateParts[2] + '/' + dateParts[0] // MM/DD/YYYY
+                let time = parts[1] || '00:00:00'
+                if (time.split(':').length === 2) time += ':00' // add seconds if missing
+                return { date, time }
+            }
+
+            // Find all table rows and locate the "Closed Transactions" section
+            const allRows = doc.querySelectorAll('tr')
+            let inClosedSection = false
+            let headerFound = false
+
+            for (const row of allRows) {
+                const cells = row.querySelectorAll('td')
+                if (cells.length === 0) continue
+
+                // Detect section headers (colspan rows)
+                if (cells[0].getAttribute('colspan')) {
+                    const sectionText = row.textContent.trim().toLowerCase()
+                    if (sectionText.includes('closed transactions') || sectionText.includes('closed trades')) {
+                        inClosedSection = true
+                        headerFound = false
+                        continue
+                    }
+                    if (inClosedSection && (sectionText.includes('open trades') || sectionText.includes('working orders') || sectionText.includes('summary') || sectionText === '')) {
+                        inClosedSection = false
+                        continue
+                    }
+                }
+
+                if (!inClosedSection) continue
+
+                // Skip the column header row
+                if (cells[0].textContent.trim().toLowerCase() === 'ticket') {
+                    headerFound = true
+                    continue
+                }
+
+                if (!headerFound) continue
+                if (cells.length < 14) continue
+
+                // Parse trade row
+                const type = cells[2].textContent.trim().toLowerCase()
+                if (type !== 'buy' && type !== 'sell') continue
+
+                const openTime = cells[1].textContent.trim()
+                const size = cells[3].textContent.trim()
+                const symbol = cells[4].textContent.trim()
+                const openPrice = cells[5].textContent.trim()
+                const closeTime = cells[8].textContent.trim()
+                const closePrice = cells[9].textContent.trim()
+                const commission = parseFloat(cells[10].textContent.trim()) || 0
+                const taxes = parseFloat(cells[11].textContent.trim()) || 0
+                const swap = parseFloat(cells[12].textContent.trim()) || 0
+                const profit = parseFloat(cells[13].textContent.trim()) || 0
+
+                if (!symbol || !openPrice || !closePrice || !openTime || !closeTime) continue
+
+                // Asset type detection - MT4 is primarily forex
+                let assetType = "forex"
+                if (symbol.startsWith('#') || symbol.startsWith('.')) {
+                    assetType = "stock"
+                }
+
+                const open = parseDateTime(openTime)
+                const close = parseDateTime(closeTime)
+                const cleanSymbol = symbol.replace(/[#.]/g, '').toUpperCase()
+
+                // MT4 shows complete trades: split into opening + closing executions
+
+                // Opening execution
+                tradesData.push({
+                    Account: account,
+                    "T/D": open.date,
+                    "S/D": open.date,
+                    Currency: "USD",
+                    Type: assetType,
+                    Side: type === 'buy' ? 'B' : 'SS',
+                    SymbolOriginal: symbol,
+                    Symbol: cleanSymbol,
+                    Qty: size,
+                    Price: openPrice,
+                    "Exec Time": open.time,
+                    Comm: "0",
+                    SEC: "0",
+                    TAF: "0",
+                    NSCC: "0",
+                    Nasdaq: "0",
+                    "ECN Remove": "0",
+                    "ECN Add": "0",
+                    "Gross Proceeds": "0",
+                    "Net Proceeds": "0",
+                    "Clr Broker": "",
+                    Liq: "",
+                    Note: ""
+                })
+
+                // Closing execution (carries all fees and profit)
+                tradesData.push({
+                    Account: account,
+                    "T/D": close.date,
+                    "S/D": close.date,
+                    Currency: "USD",
+                    Type: assetType,
+                    Side: type === 'buy' ? 'S' : 'BC',
+                    SymbolOriginal: symbol,
+                    Symbol: cleanSymbol,
+                    Qty: size,
+                    Price: closePrice,
+                    "Exec Time": close.time,
+                    Comm: Math.abs(commission).toString(),
+                    SEC: Math.abs(taxes).toString(),
+                    TAF: Math.abs(swap).toString(),
+                    NSCC: "0",
+                    Nasdaq: "0",
+                    "ECN Remove": "0",
+                    "ECN Add": "0",
+                    "Gross Proceeds": profit.toString(),
+                    "Net Proceeds": (profit + commission + taxes + swap).toString(),
+                    "Clr Broker": "",
+                    Liq: "",
+                    Note: ""
+                })
+            }
+
+            if (tradesData.length === 0) {
+                reject("No trades found in MT4 report. Make sure the file is a standard MT4 HTML statement containing closed transactions and that the MT4 language is set to English.")
+                return
+            }
+
+            resolve()
+        } catch (error) {
+            console.log("  --> ERROR " + error)
+            reject(error)
+        }
+    })
+}
+
+
+/****************************
  * TD AMERITRADE
  ****************************/
 export async function useBrokerTdAmeritrade(param) {

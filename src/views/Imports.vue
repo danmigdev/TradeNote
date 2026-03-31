@@ -5,7 +5,7 @@ import { imports, selectedItem, itemToEditId, currentDate, diaryUpdate, timeZone
 import { useInitQuill, useDateCalFormat, useInitPopover } from '../utils/utils';
 import { useUploadDiary } from '../utils/diary'
 import { useFilterSuggestions, useTradeTagsChange, useFilterTags, useToggleTagsDropdown, useGetTags, useGetAvailableTags, useGetTagInfo } from '../utils/daily';
-import { useGetTrades } from '../utils/trades';
+import { useGetTrades, useDeleteAllData } from '../utils/trades';
 
 /* MODULES */
 import Parse from 'parse/dist/parse.min.js'
@@ -63,6 +63,31 @@ function inputChooseBroker(param) {
     selectedBroker.value = param
 }
 
+/* DELETE ALL DATA */
+let showDeleteAllModal = ref(false)
+let deleteConfirmText = ref('')
+let deletingAll = ref(false)
+
+async function confirmDeleteAll() {
+    if (deleteConfirmText.value !== 'DELETE') return
+    deletingAll.value = true
+    try {
+        await useDeleteAllData()
+        showDeleteAllModal.value = false
+        deleteConfirmText.value = ''
+        window.location.href = "/dashboard"
+    } catch (error) {
+        alert("There was a problem deleting all data")
+        console.error(error)
+    } finally {
+        deletingAll.value = false
+    }
+}
+
+function cancelDeleteAll() {
+    showDeleteAllModal.value = false
+    deleteConfirmText.value = ''
+}
 
 </script>
 <template>
@@ -99,6 +124,40 @@ function inputChooseBroker(param) {
                             </tr>
                         </tbody>
                     </table>
+
+                    <hr class="mt-4 mb-4">
+                    <div>
+                        <h6>Danger Zone</h6>
+                        <p>Delete all your data including trades, executions, excursions, diaries, screenshots, playbooks, tags, notes, satisfactions and scenarios. This action is irreversible.</p>
+                        <button type="button" class="btn btn-red" v-on:click="showDeleteAllModal = true">
+                            <i class="uil uil-trash-alt"></i> Delete All Data
+                        </button>
+                    </div>
+
+                    <!-- Delete All Confirmation Modal -->
+                    <div v-if="showDeleteAllModal" class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Delete All Data</h5>
+                                    <button type="button" class="btn-close" v-on:click="cancelDeleteAll"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <p>This will permanently delete <strong>all</strong> your imported data: trades, executions, excursions, diaries, screenshots, playbooks, tags, notes, satisfactions and scenarios.</p>
+                                    <p><strong>This action cannot be undone.</strong></p>
+                                    <p>Type <strong>DELETE</strong> to confirm:</p>
+                                    <input type="text" class="form-control" v-model="deleteConfirmText" placeholder="Type DELETE to confirm" :disabled="deletingAll">
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-outline-secondary" v-on:click="cancelDeleteAll" :disabled="deletingAll">Cancel</button>
+                                    <button type="button" class="btn btn-red" v-on:click="confirmDeleteAll" :disabled="deleteConfirmText !== 'DELETE' || deletingAll">
+                                        <span v-if="deletingAll">Deleting...</span>
+                                        <span v-else>Delete All Data</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 

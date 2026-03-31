@@ -1342,3 +1342,47 @@ export const useDeleteExcursions = async () => {
         }
     })
 }
+
+/***************************************
+* DELETE ALL DATA
+***************************************/
+
+export const useDeleteAllData = async () => {
+    const collections = [
+        "trades",
+        "excursions",
+        "playbooks",
+        "cashJournals",
+        "diaries",
+        "screenshots",
+        "satisfactions",
+        "tags",
+        "notes",
+        "dailyInfos",
+        "scenarios"
+    ]
+
+    console.log(" -> Deleting all user data")
+
+    for (const collection of collections) {
+        let hasMore = true
+        while (hasMore) {
+            const parseObject = Parse.Object.extend(collection)
+            const query = new Parse.Query(parseObject)
+            query.limit(1000)
+            const results = await query.find()
+
+            if (results.length > 0) {
+                await Promise.all(results.map(result => result.destroy()))
+                console.log(`  --> Deleted ${results.length} records from ${collection}`)
+            } else {
+                hasMore = false
+            }
+        }
+    }
+
+    // Clear local state
+    imports.length = 0
+
+    console.log(" -> All user data deleted successfully")
+}
