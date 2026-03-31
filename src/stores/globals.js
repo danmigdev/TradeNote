@@ -9,6 +9,7 @@ export const pageId = ref()
 export const currentUser = ref()
 export const timeZones = ref(["America/New_York", "Asia/Shanghai", "Europe/Brussels", "Asia/Tokyo", "Asia/Hong_Kong", "Asia/Kolkata", "Europe/London", "Asia/Riyadh"])
 export const tradingCurrency = ref(typeof localStorage !== 'undefined' ? (localStorage.getItem('tradingCurrency') || "USD") : "USD")
+export const weekStartDay = ref(typeof localStorage !== 'undefined' ? parseInt(localStorage.getItem('weekStartDay') || "1") : 1) // 0=Sunday, 1=Monday(default), 6=Saturday
 export const timeZoneTrade = ref()
 export const queryLimit = ref(10000000)
 export const queryLimitExistingTrades = ref(50)

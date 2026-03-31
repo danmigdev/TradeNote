@@ -1,7 +1,7 @@
 <script setup>
 import { onBeforeMount, onMounted, reactive, ref } from 'vue';
 import { useCheckCurrentUser, useInitTooltip, useGetAPIS, useGetLayoutStyle, useExport } from '../utils/utils';
-import { currentUser, renderProfile, availableTags, apis, layoutStyle, tradingCurrency } from '../stores/globals';
+import { currentUser, renderProfile, availableTags, apis, layoutStyle, tradingCurrency, weekStartDay } from '../stores/globals';
 import { useGetAvailableTags } from '../utils/daily';
 
 /* MODULES */
@@ -20,6 +20,23 @@ let tagToDelete = ref(null)
 let accountToDelete = ref(null)
 let deletingAccount = ref(false)
 let currencyInput = ref(tradingCurrency.value)
+
+let weekStartInput = ref(weekStartDay.value)
+const weekDays = [
+    { value: 0, label: "Sunday" },
+    { value: 1, label: "Monday" },
+    { value: 2, label: "Tuesday" },
+    { value: 3, label: "Wednesday" },
+    { value: 4, label: "Thursday" },
+    { value: 5, label: "Friday" },
+    { value: 6, label: "Saturday" }
+]
+
+const saveWeekStartDay = () => {
+    weekStartDay.value = parseInt(weekStartInput.value)
+    localStorage.setItem('weekStartDay', weekStartInput.value)
+    alert("First day of week updated. Refresh the page to apply.")
+}
 
 const saveCurrency = () => {
     const val = currencyInput.value.toUpperCase().trim()
@@ -639,6 +656,23 @@ const updateAPIS = async () => {
                     <button type="button" v-on:click="updateAPIS" class="btn btn-success">Save</button>
                 </div>
 
+
+                <hr />
+
+                <!--=============== FIRST DAY OF WEEK ===============-->
+                <div class="mt-3 row align-items-center">
+                    <p class="fs-5 fw-bold">FIRST DAY OF WEEK</p>
+                    <p class="fw-lighter">Set which day the week starts on for weekly filters.</p>
+                    <div class="col-12 col-md-4">First day</div>
+                    <div class="col-12 col-md-4">
+                        <select v-model="weekStartInput" class="form-select">
+                            <option v-for="day in weekDays" :key="day.value" :value="day.value">{{ day.label }}</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <button type="button" v-on:click="saveWeekStartDay" class="btn btn-success">Save</button>
+                    </div>
+                </div>
 
                 <hr />
 

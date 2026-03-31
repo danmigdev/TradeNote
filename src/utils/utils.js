@@ -1,5 +1,5 @@
 import { useRoute } from "vue-router";
-import { pageId, timeZoneTrade, currentUser, periodRange, selectedDashTab, renderData, selectedPeriodRange, selectedPositions, selectedTimeFrame, selectedRatio, selectedAccount, selectedGrossNet, selectedPlSatisfaction, selectedBroker, selectedDateRange, selectedMonth, selectedAccounts, amountCase, screenshotsPagination, diaryUpdate, diaryButton, selectedItem, playbookUpdate, playbookButton, sideMenuMobileOut, spinnerLoadingPage, dashboardChartsMounted, dashboardIdMounted, hasData, renderingCharts, screenType, selectedRange, dailyQueryLimit, dailyPagination, endOfList, spinnerLoadMore, windowIsScrolled, legacy, selectedTags, tags, filteredTrades, idCurrent, idPrevious, idCurrentType, idCurrentNumber, idPreviousType, idPreviousNumber, screenshots, screenshotsInfos, tabGettingScreenshots, apis, layoutStyle, countdownInterval, countdownSeconds, barChartNegativeTagGroups, availableTags, groups, tradingCurrency } from "../stores/globals.js"
+import { pageId, timeZoneTrade, currentUser, periodRange, selectedDashTab, renderData, selectedPeriodRange, selectedPositions, selectedTimeFrame, selectedRatio, selectedAccount, selectedGrossNet, selectedPlSatisfaction, selectedBroker, selectedDateRange, selectedMonth, selectedAccounts, amountCase, screenshotsPagination, diaryUpdate, diaryButton, selectedItem, playbookUpdate, playbookButton, sideMenuMobileOut, spinnerLoadingPage, dashboardChartsMounted, dashboardIdMounted, hasData, renderingCharts, screenType, selectedRange, dailyQueryLimit, dailyPagination, endOfList, spinnerLoadMore, windowIsScrolled, legacy, selectedTags, tags, filteredTrades, idCurrent, idPrevious, idCurrentType, idCurrentNumber, idPreviousType, idPreviousNumber, screenshots, screenshotsInfos, tabGettingScreenshots, apis, layoutStyle, countdownInterval, countdownSeconds, barChartNegativeTagGroups, availableTags, groups, tradingCurrency, weekStartDay } from "../stores/globals.js"
 import { useECharts, useRenderDoubleLineChart, useRenderPieChart } from './charts.js';
 import { useDeleteDiary, useGetDiaries, useUploadDiary } from "./diary.js";
 import { useDeleteScreenshot, useGetScreenshots, useGetScreenshotsPagination } from '../utils/screenshots.js'
@@ -211,6 +211,25 @@ export function useGetTimeZone() {
     console.log(" -> TimeZone for Trades: " + timeZoneTrade.value)
 }
 
+// Helper: get the start of the week based on the configured weekStartDay (0=Sun, 1=Mon, ..., 6=Sat)
+function getWeekStart(date) {
+    const currentDay = date.day() // 0=Sun, 1=Mon, ..., 6=Sat
+    const startDay = weekStartDay.value
+    let diff = currentDay - startDay
+    if (diff < 0) diff += 7
+    // Compute the target date string and create a fresh dayjs in the timezone
+    // Do NOT use startOf('day') as it can shift the DST offset incorrectly
+    const targetDate = date.subtract(diff, 'day').format('YYYY-MM-DD')
+    return dayjs.tz(targetDate, timeZoneTrade.value)
+}
+
+function getWeekEnd(date) {
+    const startDate = getWeekStart(date)
+    const endDate = startDate.add(6, 'day').format('YYYY-MM-DD')
+    // Use end of day: 23:59:59 → add 1 day at midnight for clean < comparison
+    return dayjs.tz(endDate, timeZoneTrade.value).add(1, 'day')
+}
+
 export async function useGetPeriods() {
     //console.log(" -> Getting periods")
     return new Promise((resolve, reject) => {
@@ -222,28 +241,28 @@ export async function useGetPeriods() {
         }, {
             value: "thisWeek",
             label: "This Week",
-            start: Number(dayjs().tz(timeZoneTrade.value).startOf('week').add(1, 'day').unix()), // we need to transform as number because later it's stringified and this becomes date format and note unix format
-            end: Number(dayjs().tz(timeZoneTrade.value).endOf('week').add(1, 'day').unix())
+            start: Number(getWeekStart(dayjs().tz(timeZoneTrade.value)).unix()),
+            end: Number(getWeekEnd(dayjs().tz(timeZoneTrade.value)).unix())
         }, {
             value: "lastWeek",
             label: "Last Week",
-            start: Number(dayjs().tz(timeZoneTrade.value).subtract(1, 'week').startOf('week').add(1, 'day').unix()),
-            end: Number(dayjs().tz(timeZoneTrade.value).subtract(1, 'week').endOf('week').add(1, 'day').unix())
+            start: Number(getWeekStart(dayjs().tz(timeZoneTrade.value).subtract(1, 'week')).unix()),
+            end: Number(getWeekEnd(dayjs().tz(timeZoneTrade.value).subtract(1, 'week')).unix())
         }, {
             value: "lastWeekTilNow",
             label: "Last Week Until Now",
-            start: Number(dayjs().tz(timeZoneTrade.value).subtract(1, 'week').startOf('week').add(1, 'day').unix()),
-            end: Number(dayjs().tz(timeZoneTrade.value).endOf('week').add(1, 'day').unix())
+            start: Number(getWeekStart(dayjs().tz(timeZoneTrade.value).subtract(1, 'week')).unix()),
+            end: Number(getWeekEnd(dayjs().tz(timeZoneTrade.value)).unix())
         }, {
             value: "lastTwoWeeks",
             label: "Last Two Weeks",
-            start: Number(dayjs().tz(timeZoneTrade.value).subtract(2, 'week').startOf('week').add(1, 'day').unix()),
-            end: Number(dayjs().tz(timeZoneTrade.value).subtract(1, 'week').endOf('week').add(1, 'day').unix())
+            start: Number(getWeekStart(dayjs().tz(timeZoneTrade.value).subtract(2, 'week')).unix()),
+            end: Number(getWeekEnd(dayjs().tz(timeZoneTrade.value).subtract(1, 'week')).unix())
         }, {
             value: "lastTwoWeeksTilNow",
             label: "Last Two Weeks Until Now",
-            start: Number(dayjs().tz(timeZoneTrade.value).subtract(2, 'week').startOf('week').add(1, 'day').unix()),
-            end: Number(dayjs().tz(timeZoneTrade.value).endOf('week').add(1, 'day').unix())
+            start: Number(getWeekStart(dayjs().tz(timeZoneTrade.value).subtract(2, 'week')).unix()),
+            end: Number(getWeekEnd(dayjs().tz(timeZoneTrade.value)).unix())
         }, {
             value: "thisMonth",
             label: "This Month",

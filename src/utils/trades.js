@@ -50,6 +50,10 @@ export async function useGetFilteredTrades(param) {
         filteredTradesDaily.length = 0
         filteredTradesTrades.length = 0
 
+        // Precompute date-string boundaries for DST-safe comparison
+        const filterStartDate = selectedRange.value.start === 0 ? null : dayjs.unix(selectedRange.value.start).tz(timeZoneTrade.value).format('YYYY-MM-DD')
+        const filterEndDate = selectedRange.value.end === 0 ? null : dayjs.unix(selectedRange.value.end).tz(timeZoneTrade.value).format('YYYY-MM-DD')
+
         let loopTrades = (param1) => {
             //console.log("param1 "+JSON.stringify(param1))
             if (param1.length > 0) hasData.value = true //I do reverse, that is start with true so that on page load No Data does not appear
@@ -155,7 +159,10 @@ export async function useGetFilteredTrades(param) {
                             }
                         }
 
-                        if ((selectedRange.value.start === 0 && selectedRange.value.end === 0 ? element.td >= selectedRange.value.start : element.td >= selectedRange.value.start && element.td < selectedRange.value.end) && selectedPositions.value.includes(element.strategy) && selectedAccounts.value.includes(element.account) && tradeTagsSelected) {
+                        const elementDate = dayjs.unix(element.td).tz(timeZoneTrade.value).format('YYYY-MM-DD')
+                        const dateInRange = filterStartDate === null ? true : (elementDate >= filterStartDate && elementDate <= filterEndDate)
+
+                        if (dateInRange && selectedPositions.value.includes(element.strategy) && selectedAccounts.value.includes(element.account) && tradeTagsSelected) {
 
                             /**
                              * We're using tempArray to be able to group
@@ -305,21 +312,30 @@ export async function useGetTrades(param) {
         else {
             let startD = selectedRange.value.start
             let endD = selectedRange.value.end
-            //console.log("start D "+startD)
-            //console.log("end D "+endD)
+            console.log("start D "+startD)
+            console.log("end D "+endD)
             if (startD === 0 && endD === 0) {
                 // "All" filter: no date constraints
                 query.greaterThanOrEqualTo("dateUnix", 0)
             } else {
-                query.greaterThanOrEqualTo("dateUnix", startD)
-                query.lessThan("dateUnix", endD)
+                // Use date-string boundaries to avoid DST offset mismatches
+                // between import time and filter time
+                const startDate = dayjs.unix(startD).tz(timeZoneTrade.value).format('YYYY-MM-DD')
+                const endDate = dayjs.unix(endD).tz(timeZoneTrade.value).format('YYYY-MM-DD')
+                const queryStart = dayjs.utc(startDate).subtract(1, 'day').unix()
+                const queryEnd = dayjs.utc(endDate).add(2, 'day').unix()
+                query.greaterThanOrEqualTo("dateUnix", queryStart)
+                query.lessThan("dateUnix", queryEnd)
             }
             query.ascending("dateUnix");
             query.limit(queryLimit.value);
         }
         const results = await query.find();
         console.timeEnd("  --> Duration getting trades");
-        //console.log("results "+JSON.stringify(results))
+        console.log("  --> Query returned " + results.length + " results")
+        if (results.length > 0) {
+            results.forEach(r => console.log("    dateUnix: " + r.get("dateUnix") + " trades: " + (r.get("trades") ? r.get("trades").length : 0)))
+        }
         if (results.length > 0) { //here results is an array so we use lenght. Sometimees results is not array then we use if results simply
             trades = []
             trades = JSON.parse(JSON.stringify(results))
